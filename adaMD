@@ -1,0 +1,118 @@
+# **Adaptive Synthetic Sampling (ADASYN) with Cubic Polynomial Interpolation**
+
+## **1. Introduction**
+Class imbalance is a common issue in classification tasks, where the number of instances in one class (typically the minority class) is significantly lower than in another (the majority class). Traditional oversampling techniques such as **SMOTE** generate synthetic samples in a uniform manner, which may not adequately address the learning difficulty of different minority instances.  
+
+**ADASYN (Adaptive Synthetic Sampling)** improves upon SMOTE by adaptively generating synthetic samples based on the local distribution of the minority class. This allows the model to focus more on difficult-to-learn minority instances.  
+
+This implementation enhances ADASYN by replacing **linear interpolation** with **cubic polynomial interpolation**, which provides smoother synthetic samples in high-dimensional feature spaces.
+
+---
+
+## **2. Methodology**
+The ADASYN algorithm consists of the following steps:
+
+### **Step 1: Define the Minority and Majority Classes**
+Given a dataset **\(X \in \mathbb{R}^{n \times m}\)** with **\(n\)** samples and **\(m\)** features, let the class labels be **\(y \in \{C_1, C_2\}\)**, where **\(C_1\)** is the minority class and **\(C_2\)** is the majority class.  
+
+The class with the fewer samples is defined as:
+$$
+C_{\text{min}} = \arg\min (\text{class counts})
+$$
+while the majority class is:
+$$
+C_{\text{maj}} = \arg\max (\text{class counts})
+$$
+
+Let **\(n_{\text{min}}\)** and **\(n_{\text{maj}}\)** be the number of samples in the minority and majority classes, respectively.
+
+---
+
+### **Step 2: Compute the Number of Synthetic Samples to Generate**
+To address class imbalance, ADASYN determines the number of synthetic samples **\(G\)** required as:
+
+$$
+G = n_{\text{maj}} - n_{\text{min}}
+$$
+
+This ensures that the final dataset has an equal number of samples for both classes.
+
+---
+
+### **Step 3: Compute the Distribution Density for Each Minority Sample**
+For each **\(x_i\)** in the minority class **\(C_{\text{min}}\)**:
+- Find its **\(k\)-nearest neighbors** (excluding itself).
+- Let **\(k_i^{\text{maj}}\)** be the number of majority-class neighbors.
+
+The relative density ratio **\(r_i\)** for each minority sample is computed as:
+
+$$
+r_i = \frac{k_i^{\text{maj}}}{k}
+$$
+
+where **\(k\)** is the total number of nearest neighbors considered.  
+
+**\(r_i\)** is then normalized to ensure:
+
+$$
+\sum_{i=1}^{n_{\text{min}}} r_i = 1
+$$
+
+The number of synthetic samples for each **\(x_i\)** is computed as:
+
+$$
+G_i = G \cdot r_i
+$$
+
+---
+
+### **Step 4: Generate Synthetic Samples Using Cubic Polynomial Interpolation**
+For each minority instance **\(x_i\)**:
+1. Select a **random neighbor** **\(x_j\)** from its **\(k\)-nearest neighbors**.
+2. Construct a cubic polynomial interpolation between **\(x_i\)** and **\(x_j\)**.
+
+#### **Cubic Interpolation Process**
+To generate a synthetic sample, define four control points per feature **\(f\)**:
+- **\(P_0 = x_{i,f}\)** (original minority sample)
+- **\(P_1 = 0.5 \cdot (x_{i,f} + x_{j,f})\)** (midpoint control)
+- **\(P_2 = 0.5 \cdot (x_{i,f} + x_{j,f})\)** (another midpoint control)
+- **\(P_3 = x_{j,f}\)** (chosen neighbor)
+
+Interpolation points:
+$$
+X_{\text{points}} = [0, 0.33, 0.67, 1]
+$$
+$$
+Y_{\text{points}} = [P_0, P_1, P_2, P_3]
+$$
+
+Using **CubicSpline interpolation**, the new synthetic feature value is generated as:
+
+$$
+\tilde{x}_{f} = \text{CubicSpline}(g)
+$$
+
+where **\(g \sim U(0,1)\)** is a random number.
+
+This process is repeated for each feature, generating a new synthetic sample.
+
+---
+
+### **Step 5: Update the Dataset**
+The synthetic samples **\(\tilde{X}\)** are appended to the original dataset:
+
+$$
+X' = X \cup \tilde{X}, \quad y' = y \cup \tilde{y}
+$$
+
+where **\(\tilde{y}\)** contains the minority class label.
+
+---
+
+## **3. Conclusion**
+This implementation of ADASYN:
+- **Uses nearest neighbors** to determine difficult-to-learn samples.
+- **Applies cubic interpolation feature-wise** for smoother synthetic data.
+- **Improves diversity** in generated samples compared to standard linear interpolation.
+
+By incorporating **cubic polynomial interpolation**, we enhance the robustness of synthetic samples, making the dataset more representative and reducing potential overfitting issues caused by simple linear interpolation.
