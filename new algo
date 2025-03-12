@@ -1,0 +1,81 @@
+import numpy as np
+import pandas as pd
+from sklearn.neighbors import NearestNeighbors
+from numpy.polynomial.polynomial import Polynomial
+from tqdm import tqdm
+
+def custom_smote_with_density(X: pd.DataFrame, y: pd.Series, target_class=1, k_neighbors=5, random_state=42):
+    """
+    Custom SMOTE using cubic interpolation with density-aware sampling.
+
+    Parameters:
+        X (pd.DataFrame): Feature matrix.
+        y (pd.Series): Target labels.
+        target_class (int): The minority class to oversample.
+        k_neighbors (int): Number of nearest neighbors to consider.
+        random_state (int): Random seed for reproducibility.
+
+    Returns:
+        X_resampled (pd.DataFrame): New feature matrix with synthetic samples.
+        y_resampled (pd.Series): Updated target labels.
+    """
+    np.random.seed(random_state)
+    
+    y = y.reset_index(drop=True)  
+    X_minority = X[y == target_class]
+    X_majority = X[y != target_class]
+
+    # Fit KNN on minority class to get density estimate
+    knn = NearestNeighbors(n_neighbors=min(k_neighbors, len(X_minority)))
+    knn.fit(X_minority)
+
+    # Calculate minority density: Number of neighbors within distance threshold
+    distances, _ = knn.kneighbors(X_minority)
+    density_scores = np.mean(distances, axis=1)  # Higher value → lower density
+
+    # Normalize density scores to get sampling weights (inverse relationship)
+    sampling_weights = (density_scores - density_scores.min()) / (density_scores.max() - density_scores.min() + 1e-6)
+    sampling_weights = sampling_weights / sampling_weights.sum()  # Normalize to sum=1
+
+    # Compute the number of samples to generate based on imbalance and density
+    target_samples = len(X_majority) - len(X_minority)
+    num_samples_per_point = (sampling_weights * target_samples).astype(int)
+
+    synthetic_samples = []
+
+    for idx, count in tqdm(enumerate(num_samples_per_point), total=len(num_samples_per_point)):
+        x_selected = X_minority.iloc[idx].values
+        
+        for _ in range(count):
+            # Find k-nearest neighbors
+            neighbors = knn.kneighbors([x_selected], return_distance=False)[0]
+
+            # Select a random neighbor
+            neighbor_idx = np.random.choice(neighbors[1:])  # Exclude itself
+            x_neighbor = X_minority.iloc[neighbor_idx].values
+
+            # Fit a 3rd-degree polynomial between x_selected and x_neighbor
+            t_values = np.array([0, 0.33, 0.66, 1])
+            x_values = np.vstack([x_selected, 
+                                  (2*x_selected + x_neighbor)/3,
+                                  (x_selected + 2*x_neighbor)/3,
+                                  x_neighbor])
+            
+            # Generate synthetic sample
+            x_synthetic = np.zeros_like(x_selected)
+            t_random = np.random.rand()
+
+            for feature_idx in range(X.shape[1]):
+                poly = Polynomial.fit(t_values, x_values[:, feature_idx], 3)
+                x_synthetic[feature_idx] = poly(t_random)
+
+            synthetic_samples.append(x_synthetic)
+
+    # Convert to DataFrame
+    synthetic_samples_df = pd.DataFrame(synthetic_samples, columns=X.columns)
+
+    # Append synthetic samples
+    X_resampled = pd.concat([X, synthetic_samples_df], axis=0, ignore_index=True)
+    y_resampled = pd.concat([y, pd.Series(target_class, index=synthetic_samples_df.index)], axis=0, ignore_index=True)
+
+    return X_resampled, y_resampled
