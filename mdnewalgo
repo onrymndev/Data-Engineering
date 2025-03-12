@@ -1,0 +1,120 @@
+# **Custom SMOTE with Density-Based Cubic Interpolation**
+
+## **1. Introduction**
+This document explains a custom Synthetic Minority Over-sampling Technique (SMOTE) algorithm, enhanced with **density-based adaptive sampling** and **cubic polynomial interpolation**.
+
+The goal is to:
+- **Handle imbalanced datasets** by generating synthetic samples.
+- **Adapt sampling to local density** — more samples in sparse areas, fewer in dense ones.
+- **Ensure smoother, more realistic synthetic data** using cubic interpolation.
+
+---
+
+## **2. Problem Definition**
+
+Let:
+- $ X \in \mathbb{R}^{n 	imes d} $ — the feature matrix with $ n $ samples and $ d $ features.
+- $ y \in \{0, 1\}^{n} $ — the target vector, where $ 1 $ is the minority class.
+- $ X_{	ext{minority}} \subseteq X $ — minority class samples.
+
+We define the **imbalance ratio** as:
+
+$$
+r = \frac{|X_{	ext{majority}}|}{|X_{	ext{minority}}|}
+$$
+
+Our goal is to **generate synthetic samples** to bring the class sizes closer to balance, but in a **density-aware** manner.
+
+---
+
+## **3. Density-Based Sampling**
+
+We use **K-Nearest Neighbors (KNN)** to measure local density around each minority sample:
+
+### 3.1 KNN Distance Calculation  
+For a given minority sample $ x_i $, the distances to its $ k $ nearest neighbors are:
+
+$$
+d_i = \frac{1}{k} \sum_{j=1}^{k} ||x_i - x_j||_2
+$$
+
+where $ ||\cdot||_2 $ denotes the Euclidean distance. This gives a **density score** for each sample.
+
+### 3.2 Inverse Density Weighting
+We assign weights to each minority instance based on **inverse density**:
+
+$$
+w_i = \frac{d_i - \min(d)}{\max(d) - \min(d) + \epsilon}
+$$
+
+where $ \epsilon $ is a small number to avoid division by zero. Higher weights correspond to samples in sparser regions.
+
+### 3.3 Adaptive Sample Allocation  
+The total number of synthetic samples is:
+
+$$
+N_{	ext{total}} = |X_{	ext{majority}}| - |X_{	ext{minority}}|
+$$
+
+Each minority instance $ x_i $ gets a portion of these samples, proportional to its weight:
+
+$$
+n_i = \lfloor w_i 	imes N_{	ext{total}} \rfloor
+$$
+
+---
+
+## **4. Synthetic Sample Generation with Cubic Interpolation**
+
+For each minority instance $ x_i $, we randomly select a neighbor $ x_j $ and create synthetic points along a cubic curve fitted between them.
+
+### 4.1 Cubic Polynomial Fit  
+We define four interpolation points:
+
+$$
+	ext{Points} = [x_i, \frac{2x_i + x_j}{3}, \frac{x_i + 2x_j}{3}, x_j]
+$$
+
+Let $ t = [0, 0.33, 0.66, 1] $ represent the progression along the curve.
+
+We fit a cubic polynomial:
+
+$$
+P_f(t) = a t^3 + b t^2 + c t + d
+$$
+
+where coefficients $ a, b, c, d $ are determined by solving:
+
+$$
+\begin{aligned}
+P_f(0) &= x_i \\
+P_f(0.33) &= \frac{2x_i + x_j}{3} \\
+P_f(0.66) &= \frac{x_i + 2x_j}{3} \\
+P_f(1) &= x_j
+\end{aligned}
+$$
+
+For each feature, we independently fit such a polynomial.
+
+---
+
+## **5. Synthetic Sample Generation**
+
+To create a new sample, we draw a random $ t_{	ext{rand}} \in [0, 1] $ and evaluate:
+
+$$
+x_{	ext{synthetic}} = P_f(t_{	ext{rand}})
+$$
+
+This ensures the new point is **smoothly distributed** between the selected minority point and its neighbor.
+
+---
+
+## **6. Conclusion**
+
+This enhanced SMOTE algorithm combines:
+- **Density awareness** to guide sampling.
+- **Cubic interpolation** for smoother synthetic samples.
+- **Adaptive allocation** to focus on hard-to-learn areas.
+
+It is particularly suited for datasets where minority classes are unevenly distributed across feature space.
