@@ -1,0 +1,83 @@
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
+from scipy.stats import multivariate_normal
+
+def gaussian_based_smote_class_independent(X, y, k=5, sampling_ratio=1.0, regularization=1e-6):
+    """
+    Gaussian-Based SMOTE with Class-Independent Sampling.
+
+    Parameters:
+        X (numpy.ndarray): Feature matrix of shape (n_samples, n_features).
+        y (numpy.ndarray): Target labels of shape (n_samples,).
+        k (int): Number of nearest neighbors to consider for each minority sample.
+        sampling_ratio (float): Ratio of synthetic samples to generate relative to the imbalance.
+        regularization (float): Small value to add to the diagonal of the covariance matrix for regularization.
+
+    Returns:
+        X_balanced (numpy.ndarray): Balanced feature matrix.
+        y_balanced (numpy.ndarray): Balanced target labels.
+    """
+    # Identify minority and majority classes
+    minority_class = np.argmin(np.bincount(y))
+    X_minority = X[y == minority_class]
+    X_majority = X[y != minority_class]
+    n_minority = X_minority.shape[0]
+    n_majority = X_majority.shape[0]
+    n_synthetic = int(sampling_ratio * (n_majority - n_minority))
+
+    # Find k-nearest neighbors for each minority sample (including itself)
+    nbrs = NearestNeighbors(n_neighbors=k + 1).fit(X)  # +1 to include itself
+    _, indices = nbrs.kneighbors(X_minority)
+
+    synthetic_samples = []
+    for i in range(n_minority):
+        # Get the neighborhood of x_i (excluding itself)
+        neighborhood_indices = indices[i][1:]  # Exclude the first index (itself)
+        neighborhood = X[neighborhood_indices]
+
+        # Calculate the number of synthetic samples needed to balance the minority class
+        n_samples_needed = int(n_synthetic / n_minority)
+
+        # Fit a Gaussian distribution to the neighborhood (class-independent)
+        if len(neighborhood) > 1:  # Ensure there are enough samples to compute covariance
+            try:
+                # Compute mean and regularized covariance matrix
+                mu = np.mean(neighborhood, axis=0)
+                sigma = np.cov(neighborhood, rowvar=False) + regularization * np.eye(neighborhood.shape[1])
+
+                # Generate synthetic samples from the Gaussian distribution
+                samples = multivariate_normal.rvs(mean=mu, cov=sigma, size=n_samples_needed)
+                synthetic_samples.extend(samples)
+            except:
+                # Fallback to linear interpolation if Gaussian sampling fails
+                for _ in range(n_samples_needed):
+                    x1, x2 = neighborhood[np.random.choice(len(neighborhood), 2, replace=False)]
+                    lambda_ = np.random.uniform(0, 1)
+                    x_new = x1 + lambda_ * (x2 - x1)
+                    synthetic_samples.append(x_new)
+        else:
+            # Fallback to linear interpolation if there are too few samples in the neighborhood
+            for _ in range(n_samples_needed):
+                x1, x2 = neighborhood[np.random.choice(len(neighborhood), 2, replace=False)]
+                lambda_ = np.random.uniform(0, 1)
+                x_new = x1 + lambda_ * (x2 - x1)
+                synthetic_samples.append(x_new)
+
+    # Combine synthetic samples with the original data
+    synthetic_samples = np.array(synthetic_samples)
+    X_balanced = np.vstack([X, synthetic_samples])
+    y_balanced = np.hstack([y, np.full(len(synthetic_samples), minority_class)])
+
+    return X_balanced, y_balanced
+
+# Usage Example
+if __name__ == "__main__":
+    # Example data
+    X = np.array([[1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9]])
+    y = np.array([0, 0, 0, 0, 1, 1, 1, 1])  # Binary classification with imbalance
+
+    # Apply Gaussian-Based SMOTE with Class-Independent Sampling
+    X_resampled, y_resampled = gaussian_based_smote_class_independent(X, y, k=5, sampling_ratio=1.0, regularization=1e-6)
+
+    print("Original data shape:", X.shape, y.shape)
+    print("Resampled data shape:", X_resampled.shape, y_resampled.shape)
