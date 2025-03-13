@@ -1,0 +1,64 @@
+import pandas as pd
+import numpy as np
+from imblearn.over_sampling import SMOTE
+from imblearn.under_sampling import EditedNearestNeighbours
+
+def manual_smoteenn(X, y, k_neighbors=5):
+    """
+    Replicate the behavior of SMOTEENN by applying SMOTE and then ENN only to the majority class.
+
+    Parameters:
+        X (pandas.DataFrame): Feature matrix of shape (n_samples, n_features).
+        y (pandas.Series): Target labels of shape (n_samples,).
+        k_neighbors (int): Number of neighbors to use for SMOTE and ENN.
+
+    Returns:
+        X_resampled (pandas.DataFrame): Resampled and cleaned feature matrix.
+        y_resampled (pandas.Series): Resampled and cleaned target labels.
+    """
+    # Convert X and y to numpy arrays for compatibility with imblearn
+    X = X.values
+    y = y.values
+
+    # Step 1: Apply SMOTE to oversample the minority class
+    smote = SMOTE(k_neighbors=k_neighbors)
+    X_resampled, y_resampled = smote.fit_resample(X, y)
+
+    # Step 2: Apply ENN only to the majority class
+    # Identify the majority class
+    majority_class = np.argmax(np.bincount(y_resampled))
+
+    # Separate majority and minority classes
+    X_majority = X_resampled[y_resampled == majority_class]
+    y_majority = y_resampled[y_resampled == majority_class]
+    X_minority = X_resampled[y_resampled != majority_class]
+    y_minority = y_resampled[y_resampled != majority_class]
+
+    # Apply ENN only to the majority class
+    enn = EditedNearestNeighbours(n_neighbors=k_neighbors)
+    X_majority_resampled, y_majority_resampled = enn.fit_resample(X_majority, y_majority)
+
+    # Combine the resampled majority class with the minority class
+    X_resampled = np.vstack([X_minority, X_majority_resampled])
+    y_resampled = np.hstack([y_minority, y_majority_resampled])
+
+    # Convert back to pandas DataFrame and Series
+    X_resampled = pd.DataFrame(X_resampled, columns=X.columns)
+    y_resampled = pd.Series(y_resampled)
+
+    return X_resampled, y_resampled
+
+# Usage Example
+if __name__ == "__main__":
+    # Example data
+    X = pd.DataFrame({
+        'feature1': [1, 2, 3, 4, 5, 6, 7, 8],
+        'feature2': [2, 3, 4, 5, 6, 7, 8, 9]
+    })
+    y = pd.Series([0, 0, 0, 0, 1, 1, 1, 1])  # Binary classification with imbalance
+
+    # Apply manual SMOTEENN
+    X_resampled, y_resampled = manual_smoteenn(X, y, k_neighbors=5)
+
+    print("Original data shape:", X.shape, y.shape)
+    print("Resampled data shape:", X_resampled.shape, y_resampled.shape)
