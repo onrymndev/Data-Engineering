@@ -1,0 +1,117 @@
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
+from collections import Counter
+
+# -------------------------------------
+# SMOTE - Synthetic Minority Oversampling
+# -------------------------------------
+
+def synthetic_sample(point, neighbor, random_state=None):
+    """ Generate a synthetic sample between a point and its neighbor. """
+    if random_state:
+        np.random.seed(random_state)
+    return point + np.random.rand() * (neighbor - point)
+
+def smote(X, y, minority_class, n_neighbors=5, random_state=None):
+    """ Implements SMOTE: Generates synthetic samples for the minority class. """
+    minority_samples = X[y == minority_class]
+    n_samples_to_generate = len(X[y != minority_class]) - len(minority_samples)
+
+    if n_samples_to_generate <= 0:
+        return X, y
+
+    nn = NearestNeighbors(n_neighbors=n_neighbors).fit(minority_samples)
+    synthetic_samples = []
+
+    for _ in range(n_samples_to_generate):
+        idx = np.random.randint(0, len(minority_samples))
+        point = minority_samples[idx]
+        neighbors = nn.kneighbors([point], return_distance=False).flatten()
+        neighbor = minority_samples[np.random.choice(neighbors[1:])]
+        synthetic_samples.append(synthetic_sample(point, neighbor, random_state))
+
+    synthetic_samples = np.array(synthetic_samples)
+    X_resampled = np.vstack((X, synthetic_samples))
+    y_resampled = np.hstack((y, np.array([minority_class] * len(synthetic_samples))))
+
+    return X_resampled, y_resampled
+
+# -------------------------------------
+# ENN - Distance Weighted Edited Nearest Neighbors
+# -------------------------------------
+
+def weighted_majority_voting(neighbors_labels, neighbors_distances):
+    """
+    Performs weighted majority voting based on inverse distance.
+    Closer neighbors have more influence.
+    """
+    weights = 1 / (neighbors_distances + 1e-5)  # Avoid division by zero
+    label_weights = {}
+
+    for label, weight in zip(neighbors_labels, weights):
+        label_weights[label] = label_weights.get(label, 0) + weight
+
+    return max(label_weights, key=label_weights.get)
+
+def enn_with_distance_weighting(X, y, n_neighbors=3):
+    """
+    ENN with distance weighting. Keeps samples whose label agrees 
+    with the weighted majority of their neighbors.
+    """
+    nn = NearestNeighbors(n_neighbors=n_neighbors+1).fit(X)
+    keep_indices = []
+
+    for idx, (point, label) in enumerate(zip(X, y)):
+        neighbors_distances, neighbors = nn.kneighbors([point])
+        neighbors_distances = neighbors_distances.flatten()[1:]  # Exclude self
+        neighbors_labels = y[neighbors.flatten()[1:]]
+
+        # Get weighted majority class among neighbors
+        majority_label = weighted_majority_voting(neighbors_labels, neighbors_distances)
+
+        # Keep the point if the weighted majority agrees with the label
+        if label == majority_label:
+            keep_indices.append(idx)
+
+    return X[keep_indices], y[keep_indices]
+
+# -------------------------------------
+# SMOTEENN - Full Pipeline
+# -------------------------------------
+
+def smoteenn_with_weighted_enn(X, y, n_neighbors_smote=5, n_neighbors_enn=3, random_state=None):
+    """ Combines SMOTE oversampling and distance-weighted ENN undersampling. """
+    
+    # Identify the minority class
+    class_counts = Counter(y)
+    minority_class = min(class_counts, key=class_counts.get)
+
+    # Apply SMOTE
+    X_resampled, y_resampled = smote(X, y, minority_class, n_neighbors=n_neighbors_smote, random_state=random_state)
+
+    # Apply distance-weighted ENN
+    X_final, y_final = enn_with_distance_weighting(X_resampled, y_resampled, n_neighbors=n_neighbors_enn)
+
+    print("Original class distribution:", class_counts)
+    print("After SMOTE:", Counter(y_resampled))
+    print("After distance-weighted ENN:", Counter(y_final))
+
+    return X_final, y_final
+
+# -------------------------------------
+# Example usage
+# -------------------------------------
+
+if __name__ == "__main__":
+    from sklearn.datasets import make_classification
+
+    # Generate an imbalanced dataset
+    X, y = make_classification(
+        n_samples=1000, n_features=20, n_informative=2, n_redundant=10,
+        n_clusters_per_class=1, weights=[0.9, 0.1], random_state=42
+    )
+
+    # Apply the enhanced SMOTEENN
+    X_resampled, y_resampled = smoteenn_with_weighted_enn(X, y, random_state=42)
+
+    print("Resampled data shape:", X_resampled.shape, y_resampled.shape)
