@@ -1,0 +1,151 @@
+# **Riske Maruz Değer (VaR) ve Monte Carlo Simülasyonu**
+
+---
+
+## 🎯 **1. Giriş**
+
+Riske Maruz Değer (**Value at Risk - VaR**) finansal risk analizlerinde kullanılan bir yöntemdir. **VaR**, belirli bir zaman dilimi içinde, belirli bir güven seviyesinde bir portföyün karşılaşabileceği **maksimum olası zararı** ölçer.
+
+---
+
+## 📌 **2. Monte Carlo Simülasyonu Nedir?**
+
+Monte Carlo Simülasyonu, olası piyasa senaryolarını **rastgele** üretir. Her senaryoda portföy değerini hesaplar ve **en kötü senaryoları analiz ederek** VaR tahmini yapar.
+
+### 🛠️ **2.1 Monte Carlo Simülasyonu Adımları:**
+
+1. **Girdi verilerini belirle:**  
+   - Portföy değeri
+   - Günlük ortalama getiri $(\mu)$
+   - Günlük volatilite $(\sigma)$  
+   - Simülasyon sayısı (örneğin 10.000)
+   - Zaman dilimi (1 gün)  
+
+2. **Rastgele getiriler üret:**  
+   Getiriler **normal dağılıma** göre üretilir:
+   
+   $$
+   \text{Getiri} = \mu + \sigma \times Z
+   $$
+
+   - $Z$ = Standart normal dağılımdan rastgele sayı ($Z \sim N(0,1)$)
+
+3. **Portföy değerini hesapla:**  
+   Her senaryo için:
+
+   $$
+   \text{Yeni Portföy Değeri} = \text{Mevcut Değer} \times (1 + \text{Getiri})
+   $$
+
+4. **VaR'ı belirle:**  
+   - **%95 güven seviyesi** için en kötü **%5'lik** dilimi al.  
+   - Bu senaryoların ortalama kaybı **VaR** değeridir.
+
+---
+
+## 🎯 **3. Örnek Portföy ve Hesaplamalar**
+
+Aynı portföyü **üç yöntemle** de hesaplayalım:
+
+### **3.1 Portföy Bilgileri:**  
+
+- **Portföy değeri:** 1.000.000 USD  
+- **Günlük ortalama getiri:** %0.1 (0.001)  
+- **Günlük volatilite:** %2 (0.02)  
+- **Güven seviyesi:** %95  
+- **Simülasyon sayısı:** 10.000  
+
+---
+
+## 🛠️ **4. Monte Carlo Simülasyonu Hesaplama**
+
+**Adım 1: Rastgele getiriler üretelim:**  
+
+Her senaryo için:
+
+$$
+\text{Getiri} = 0.001 + 0.02 \times Z
+$$
+
+Örnek $Z$ değerleriyle hesaplayalım:  
+
+| **Senaryo** | **Rastgele $Z$** | **Getiri** |
+|-------------|-------------------|------------|
+| 1           | -1.23             | -2.46%     |
+| 2           | 0.45              | 1.90%      |
+| 3           | -0.76             | -1.42%     |
+| ...         | ...               | ...        |
+| 10000       | -1.89             | -3.68%     |
+
+---
+
+**Adım 2: Portföy değerlerini hesaplayalım:**  
+
+$$
+\text{Yeni Portföy Değeri} = 1,000,000 \times (1 + \text{Getiri})
+$$
+
+- **Senaryo 1:** $1,000,000 \times (1 - 0.0246) = 975,400$ USD  
+- **Senaryo 2:** $1,000,000 \times (1 + 0.0190) = 1,019,000$ USD  
+
+---
+
+**Adım 3: VaR'ı belirleyelim:**  
+
+- **10,000 senaryoda en kötü %5** dilimi alalım (500. en kötü senaryo):  
+  - **VaR = 36,500 USD** (en kötü %5 senaryonun ortalaması)  
+
+---
+
+## 🔍 **5. Tarihsel Simülasyon Yöntemi ile Aynı Portföy**  
+
+- **500 günlük geçmiş veri toplandı.**  
+- **%95 güven seviyesi için en kötü %5'lik dilim (25. sıra)** seçildi.  
+
+**Örnek:**  
+- **25. en kötü getiri:** **-3.2%**  
+
+$$
+\text{VaR} = 1,000,000 \times 0.032 = 32,000 \text{ USD}
+$$  
+
+---
+
+## 📌 **6. Varyans-Kovaryans Yöntemi ile Aynı Portföy**  
+
+**%95 güven seviyesinde $Z = 1.65$**
+
+$$
+\text{VaR} = 1,000,000 \times (0.001 - 1.65 \times 0.02)
+$$
+
+$$
+\text{VaR} = 1,000,000 \times (-0.032) = 32,000 \text{ USD}
+$$  
+
+---
+
+## 🏁 **7. Yöntemlerin Karşılaştırması**
+
+| **Yöntem**              | **VaR Değeri (USD)** | **Avantajları**                           | **Dezavantajları**                     |
+|-------------------------|----------------------|------------------------------------------|---------------------------------------|
+| **Tarihsel Simülasyon**  | **32,000**           | Piyasa varsayımı gerekmez.               | Geçmiş veriler geleceği yansıtmayabilir.|
+| **Varyans-Kovaryans**    | **32,000**           | Hızlı ve basit hesaplanır.               | Normal dağılım varsayımı yanıltıcı olabilir.|
+| **Monte Carlo Simülasyonu** | **36,500**         | Karmaşık portföyler için uygundur.       | Yüksek hesaplama maliyeti vardır.       |
+
+---
+
+## 🚀 **8. Sonuç**
+
+- **Monte Carlo Simülasyonu**, karmaşık portföylerde daha esnek ve gerçekçi sonuçlar verir.  
+- **Tarihsel Simülasyon**, geçmiş veriye dayandığı için basit ve güvenilir olabilir ama piyasa koşulları değişirse yanıltıcı olabilir.  
+- **Varyans-Kovaryans Yöntemi**, hızlıdır ama normal dağılım varsayımı doğru değilse VaR değerini olduğundan düşük gösterebilir.  
+
+---
+
+### 💡 **9. Ek Konular:**
+
+- **Koşullu VaR (CVaR)** — En kötü durumdaki ortalama zararı ölçer.  
+- **Stres Testleri** — Ekonomik kriz senaryolarında portföy performansını simüle eder.  
+
+İstersen **CVaR** veya **Stres Testleri** konusuna da girebiliriz. Ne dersin? 🚀✨  
