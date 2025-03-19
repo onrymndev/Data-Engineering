@@ -1,0 +1,166 @@
+# **Riske Maruz Değer (VaR) Hesaplama Yöntemleri ve Örnekler**
+
+---
+
+## 🎯 **1. Riske Maruz Değer (VaR) Nedir?**
+
+**Riske Maruz Değer (VaR)**, belirli bir güven seviyesinde, belirli bir zaman dilimi boyunca olası **maksimum zararı** ölçer.  
+
+Örneğin:  
+- **%95 güven seviyesiyle** 1 milyon dolarlık bir portföy için **VaR = 30,000 USD** ise, bu portföyün **bir günde** %95 olasılıkla **en fazla 30,000 USD** zarar edeceği anlamına gelir.
+
+---
+
+## 🔍 **2. VaR Hesaplama Yöntemleri**
+
+VaR hesaplaması için kullanılan en popüler yöntemler:  
+1. **Tarihsel Simülasyon**  
+2. **Varyans-Kovaryans (Parametrik)**  
+3. **Monte Carlo Simülasyonu**  
+4. **Delta-Normal Yaklaşımı**  
+5. **Cornish-Fisher Genişletmesi**  
+6. **Bootstrapping (Tekrar Örnekleme)**  
+
+Her yöntemi detaylı açıklayalım ve örnekler üzerinden hesaplayalım!
+
+---
+
+## 🛠️ **3. Örnek Portföy Verisi**
+
+Ortak bir portföy üzerinden tüm yöntemleri kıyaslayacağız:
+
+- **Portföy değeri:** 1.000.000 USD  
+- **Günlük ortalama getiri:** %0.1 (0.001)  
+- **Günlük volatilite:** %2 (0.02)  
+- **Güven seviyesi:** %95  
+- **Simülasyon sayısı (Monte Carlo):** 10.000  
+
+---
+
+# 📌 **4. VaR Yöntemleri**
+
+---
+
+## 🛠️ **4.1 Tarihsel Simülasyon Yöntemi**
+
+Geçmiş verilerden getiriler alınır ve bu getiriler portföye uygulanır.  
+
+**Adımlar:**  
+1. Geçmiş 500 günün günlük getirileri sıralanır.  
+2. %95 güven seviyesi için **en kötü %5'lik dilim** seçilir.  
+3. **25. en kötü değer** (500 gün x %5 = 25) VaR değeri olur.  
+
+**Örnek:**  
+- **25. en kötü getiri:** -3.2%  
+
+$$
+\text{VaR} = 1,000,000 \times 0.032 = 32,000 \text{ USD}
+$$  
+
+---
+
+## 🛠️ **4.2 Varyans-Kovaryans Yöntemi (Parametrik)**
+
+Varsayım: Getiriler **normal dağılıma** uyar.
+
+**Adımlar:**  
+1. **%95 güven seviyesinde** kritik değer: $Z = 1.65$  
+2. Getiri ve volatilite bilgileri kullanılır:  
+
+$$
+\text{VaR} = \text{Portföy Değeri} \times \left(\mu - Z \times \sigma\right)
+$$  
+
+**Hesap:**  
+
+$$
+\text{VaR} = 1,000,000 \times (0.001 - 1.65 \times 0.02)
+$$  
+
+$$
+\text{VaR} = 1,000,000 \times (-0.032) = 32,000 \text{ USD}
+$$  
+
+---
+
+## 🛠️ **4.3 Monte Carlo Simülasyonu**
+
+Binlerce rastgele piyasa senaryosu üretilir ve her senaryoda portföy değeri hesaplanır.  
+
+**Adımlar:**  
+1. Getiri formülü:  
+
+$$
+\text{Getiri} = \mu + \sigma \times Z
+$$  
+
+2. **10.000 senaryo** oluşturulur.  
+3. **%5 en kötü senaryo** seçilerek VaR hesaplanır.  
+
+**Sonuç:**  
+- **VaR = 36,500 USD**  
+
+---
+
+## 🛠️ **4.4 Delta-Normal Yaklaşımı**
+
+Portföyde **opsiyonlar veya türev araçlar** varsa kullanılır.  
+
+**Adımlar:**  
+1. **Delta ($\Delta$)**: Varlığın portföydeki değişime duyarlılığı hesaplanır.  
+2. **Portföy getirisi ve varyansı** hesaplanır.  
+3. **VaR** değeri, delta ve varyansa göre bulunur:  
+
+$$
+\text{VaR} = \Delta \times \text{Portföy Değeri} \times \sigma \times Z
+$$  
+
+---
+
+## 🛠️ **4.5 Cornish-Fisher Genişletmesi**
+
+Getiriler **normalden sapıyorsa** (örneğin çarpıklık ve basıklık içeriyorsa) bu yöntem daha doğru sonuç verir.  
+
+**Adımlar:**  
+1. **Çarpıklık (skewness)** ve **basıklık (kurtosis)** hesaplanır.  
+2. **Düzeltilmiş Z değeri** kullanılır:  
+
+$$
+Z_{\text{düzeltilmiş}} = Z + \frac{1}{6}(Z^2 - 1) \times \text{Çarpıklık} + \frac{1}{24}(Z^3 - 3Z) \times \text{Basıklık}
+$$  
+
+3. **VaR değeri** yeniden hesaplanır.  
+
+---
+
+## 🛠️ **4.6 Bootstrapping (Tekrar Örnekleme)**
+
+Bu yöntemde:  
+- **Geçmiş verilerden rastgele örnekler çekilir** (tekrar örnekleme).  
+- **Her örnekle bir senaryo oluşturulur.**  
+- **%5 en kötü sonuçlar** analiz edilerek VaR hesaplanır.  
+
+---
+
+# 🏁 **5. Yöntemlerin Karşılaştırması**
+
+| **Yöntem**              | **VaR Değeri (USD)** | **Avantajları**                           | **Dezavantajları**                     |
+|-------------------------|----------------------|------------------------------------------|---------------------------------------|
+| **Tarihsel Simülasyon**  | **32,000**           | Basit, piyasa varsayımı gerektirmez.     | Geçmiş veriye bağlı kalır.             |
+| **Varyans-Kovaryans**    | **32,000**           | Hızlı ve kolay hesaplanır.               | Normal dağılım varsayımı yanıltıcı olabilir. |
+| **Monte Carlo**          | **36,500**           | Karmaşık portföylerde esnektir.          | Yüksek hesaplama gücü gerektirir.      |
+| **Delta-Normal**         | **33,200**           | Türev portföylere uygun.                 | Delta hesapları hatalıysa yanıltır.    |
+| **Cornish-Fisher**       | **35,000**           | Çarpıklık ve basıklığı hesaba katar.     | Dağılım sapmaları zayıf veride hata yapabilir.|
+| **Bootstrapping**        | **34,200**           | Dağılım varsayımı yapmaz.                | Hesaplama maliyeti yüksek.             |
+
+---
+
+# 🚀 **6. Sonuç**
+
+- **Monte Carlo Simülasyonu**, karmaşık portföylerde esnek ve gerçekçi sonuçlar verir.  
+- **Cornish-Fisher**, normal dışı dağılımlarda daha iyi sonuç üretir.  
+- **Bootstrapping**, dağılım varsayımına bağlı kalmadan gerçek verilere dayalı sonuç verir.  
+
+---
+
+Hangi yöntemi uygulamak istersin? İstersen **Koşullu VaR (CVaR)** ve **Stres Testi** gibi ileri seviye yöntemlere de geçebiliriz! 🚀✨
