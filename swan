@@ -1,0 +1,119 @@
+SELECT 
+    X.PARTY_ID, 
+    X.DATA_DATE, 
+    X.MODEL_SCORE, 
+    CASE WHEN X.PDC_30 > 30 THEN 1 ELSE 0 END AS TARGET,
+    X.MARCH_2024_INFLATION_RATE,
+    X.LAST_KKB_QUERY_DATE_INFL_RATE,
+    -- Add your dynamic variables here
+    listToString(var_list)
+
+FROM (
+    SELECT  
+        A.PARTY_ID, 
+        A.DATA_DATE, 
+        B.MODEL_SCORE, 
+        MAX(K.PAST_DUE_COUNT) AS PDC_30
+    FROM 
+        DM_CAD.INP_RETAIL_EARLY_DLQ_MODEL_v3 A
+        INNER JOIN EDW.PDM_CUSTOMER K 
+            ON A.PARTY_ID = K.PARTY_ID 
+            AND A.DATA_DATE + 1 = K.DATA_DATE
+        INNER JOIN DM_CAD.OUT_RETAIL_EARLY_DLQ_MODEL_v3 B 
+            ON A.PARTY_ID = B.PARTY_ID 
+            AND A.DATA_DATE = B.DATA_DATE
+        LEFT JOIN EDW.PDM_CUSTOMER L 
+            ON A.PARTY_ID = L.PARTY_ID 
+            AND L.DATA_DATE BETWEEN A.DATA_DATE + 30 AND A.DATA_DATE + 35
+    WHERE 
+        A.CUSTOMER_PAST_DUE_FLG = 1 
+        AND A.PAST_DUE_COUNT = 1
+    GROUP BY  
+        A.PARTY_ID, 
+        A.DATA_DATE, 
+        B.MODEL_SCORE
+) X
+
+INNER JOIN (
+    SELECT 
+        t2.PARTY_ID, 
+        t2.DATA_DATE
+    FROM (
+        WITH data AS (
+            SELECT 
+                PARTY_ID, 
+                TO_DATE(DATA_DATE, 'dd.mm.yy') AS DATA_DATE
+            FROM 
+                DM_CAD.INP_RETAIL_EARLY_DLQ_MODEL_v3
+        ),
+        rdata AS (
+            SELECT 
+                ROW_NUMBER() OVER (PARTITION BY PARTY_ID ORDER BY DATA_DATE) AS id, 
+                PARTY_ID, 
+                DATA_DATE
+            FROM data
+        )
+        SELECT 
+            PARTY_ID, 
+            DATA_DATE
+        FROM (
+            SELECT * 
+            FROM rdata
+            MODEL 
+                PARTITION BY (PARTY_ID)
+                DIMENSION BY (id)
+                MEASURES (
+                    DATA_DATE AS DATA_DATE, 
+                    CAST(NULL AS DATE) AS latest_date
+                )
+                RULES (
+                    latest_date[ANY] = 
+                        NVL2(
+                            latest_date[CV() - 1],
+                            CASE 
+                                WHEN TRUNC(DATA_DATE[CV()]) < TRUNC(latest_date[CV() - 1]) + NUMTODSINTERVAL(30, 'DAY') 
+                                    THEN latest_date[CV() - 1] 
+                                ELSE DATA_DATE[CV()] 
+                            END,
+                            DATA_DATE[CV()]
+                        ),
+                    DATA_DATE[ANY] = 
+                        NVL2(
+                            latest_date[CV() - 1],
+                            CASE 
+                                WHEN TRUNC(DATA_DATE[CV()]) >= TRUNC(latest_date[CV() - 1]) + NUMTODSINTERVAL(30, 'DAY') 
+                                    THEN DATA_DATE[CV()] 
+                            END,
+                            DATA_DATE[CV()]
+                        )
+                )
+        )
+        WHERE DATA_DATE IS NOT NULL
+    ) t1 
+    INNER JOIN DM_CAD.INP_RETAIL_EARLY_DLQ_MODEL_v3 t2 
+        ON t1.PARTY_ID = t2.PARTY_ID 
+        AND t1.DATA_DATE = t2.DATA_DATE
+    WHERE 
+        t2.CUSTOMER_PAST_DUE_FLG = 1
+) T2 
+ON X.PARTY_ID = T2.PARTY_ID 
+AND X.DATA_DATE = T2.DATA_DATE
+
+LEFT JOIN DM_CAD.INP_RETAIL_EARLY_DLQ_MODEL_v3 Y 
+    ON X.PARTY_ID = Y.PARTY_ID 
+    AND X.DATA_DATE = Y.DATA_DATE
+
+UNION ALL
+
+SELECT 
+    PARTY_ID, 
+    DATA_DATE, 
+    MODEL_SCORE, 
+    TARGET, 
+    MARCH_2024_INFLATION_RATE, 
+    LAST_KKB_QUERY_DATE_INFL_RATE,
+    listToString(var_list)
+FROM 
+    GLOBAL_RISK_VALIDATION.SWAN_TO_BUCKET1_SKORLU_DEV_VAL_V2 
+WHERE 
+    CUSTOMER_PAST_DUE_FLG = 1;
