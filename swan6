@@ -1,0 +1,75 @@
+-- Step 1: Pre-order all rows with row number
+WITH ordered_data AS (
+    SELECT 
+        t1.PARTY_ID,
+        t1.DATA_DATE,
+        t4.MODEL_SCORE,
+        t5.PAST_DUE_COUNT,
+        ROW_NUMBER() OVER (PARTITION BY t1.PARTY_ID ORDER BY t1.DATA_DATE) AS rn
+    FROM
+        DM_CAD.INP_COM_SME_EARLY_DLQ_MODEL_V2 t1
+        LEFT JOIN EDW.PDM_CUSTOMER t2 
+            ON t1.PARTY_ID = t2.PARTY_ID 
+            AND t1.DATA_DATE + 1 = t2.DATA_DATE
+        INNER JOIN DM_CAD.OUT_COM_SME_EARLY_DLQ_MODEL_V2 t4 
+            ON t1.PARTY_ID = t4.PARTY_ID 
+            AND t1.DATA_DATE = t4.DATA_DATE
+        LEFT JOIN EDW.PDM_CUSTOMER t5 
+            ON t1.PARTY_ID = t5.PARTY_ID 
+            AND t5.DATA_DATE BETWEEN t1.DATA_DATE + 30 AND t1.DATA_DATE + 35
+    WHERE 
+        t2.PAST_DUE_COUNT = 1
+),
+-- Step 2: Recursive filtering
+recursive_filter (
+    PARTY_ID,
+    DATA_DATE,
+    MODEL_SCORE,
+    PAST_DUE_COUNT,
+    LAST_ACCEPTED_DATE,
+    RN
+) AS (
+    -- Anchor: start with the earliest row (rn = 1)
+    SELECT 
+        PARTY_ID,
+        DATA_DATE,
+        MODEL_SCORE,
+        PAST_DUE_COUNT,
+        DATA_DATE AS LAST_ACCEPTED_DATE,
+        RN
+    FROM ordered_data
+    WHERE RN = 1
+
+    UNION ALL
+
+    -- Recursive: find the next row that is ≥ 30 days after the last accepted row
+    SELECT 
+        od.PARTY_ID,
+        od.DATA_DATE,
+        od.MODEL_SCORE,
+        od.PAST_DUE_COUNT,
+        od.DATA_DATE AS LAST_ACCEPTED_DATE,
+        od.RN
+    FROM ordered_data od
+    JOIN recursive_filter rf
+        ON od.PARTY_ID = rf.PARTY_ID
+        AND od.DATA_DATE >= rf.LAST_ACCEPTED_DATE + 30
+        AND od.RN > rf.RN -- make sure we're only moving forward in time
+        AND NOT EXISTS (
+            -- prevent selecting multiple rows with same conditions (take only next available one)
+            SELECT 1
+            FROM ordered_data od2
+            WHERE od2.PARTY_ID = rf.PARTY_ID
+              AND od2.RN > rf.RN
+              AND od2.DATA_DATE >= rf.LAST_ACCEPTED_DATE + 30
+              AND od2.RN < od.RN
+        )
+)
+-- Step 3: Final output
+SELECT 
+    PARTY_ID,
+    DATA_DATE,
+    MODEL_SCORE,
+    PAST_DUE_COUNT
+FROM recursive_filter
+ORDER BY PARTY_ID, DATA_DATE;
