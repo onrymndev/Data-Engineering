@@ -19,29 +19,33 @@ def tenor_to_offset(tenor):
 tenor_offsets = {col: tenor_to_offset(col) for col in df.columns}
 
 # ---- Step 3: Interpolation function ----
-def interpolate_row(start_date, row, n_days=1300):
+def interpolate_row(start_date, row, horizon_years=5):
+    # 1. Map known tenors to future dates
     known_dates = [start_date + tenor_offsets[col] for col in df.columns]
     known_values = row.values.astype(float)
+    
+    # 2. Create time series with known dates
     known_series = pd.Series(data=known_values, index=pd.to_datetime(known_dates)).sort_index()
 
-    # Generate future business days from the start_date
-    target_dates = pd.date_range(start=start_date, periods=n_days, freq='B')
+    # 3. Generate business days up to 5 years ahead
+    end_date = start_date + pd.DateOffset(years=horizon_years)
+    bdays = pd.date_range(start=start_date, end=end_date, freq='B')
 
-    # Combine and interpolate
-    full_index = known_series.index.union(target_dates).sort_values()
-    interpolated = known_series.reindex(full_index).interpolate(method='time')
-    result_series = interpolated.loc[target_dates]
+    # 4. Interpolate only on business days, keeping known values
+    full_series = known_series.reindex(known_series.index.union(bdays)).sort_index()
+    interpolated = full_series.interpolate(method='time')
+    interpolated = interpolated.loc[bdays]
 
-    # Return single-row DataFrame with date columns
-    return pd.DataFrame([result_series.values], columns=result_series.index)
+    # 5. Return a single-row DataFrame with date columns
+    return pd.DataFrame([interpolated.values], columns=interpolated.index)
 
-# ---- Step 4: Loop with tqdm to track progress ----
+# ---- Step 4: Run for each row with tqdm ----
 interpolated_dfs = []
 
 for idx, row in tqdm(df.iterrows(), total=len(df), desc="Interpolating rows"):
-    interpolated_row_df = interpolate_row(idx, row)
-    interpolated_row_df.index = [idx]  # name the row using its original date
-    interpolated_dfs.append(interpolated_row_df)
+    interpolated_df = interpolate_row(idx, row)
+    interpolated_df.index = [idx]  # Name the row using its original date
+    interpolated_dfs.append(interpolated_df)
 
-# ---- Example: First one-row DataFrame ----
-print(interpolated_dfs[0].head())
+# ---- Example: View one interpolated row ----
+print(interpolated_dfs[0].iloc[:, :5])  # first 5 columns (dates)
