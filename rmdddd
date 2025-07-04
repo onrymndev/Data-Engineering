@@ -1,0 +1,107 @@
+Harika! O zaman aynı Altın-TL bazlı forward işlem için bu sefer Historical Simulation VaR nasıl hesaplanır, onu adım adım açıklayayım.
+
+⸻
+
+📌 Historical Simulation VaR Nedir?
+
+Bu yöntem, normal dağılım ya da parametrik bir varsayım yapmaz.
+Gerçekleşmiş geçmiş getirileri kullanarak portföy değer değişimlerini simüle eder.
+Altın-TL forward için bu, geçmişteki altın ve kur getirileriyle forward pozisyonunun değerinin ne kadar değişebileceğini görmektir.
+
+⸻
+
+✔️ Adım Adım Historical Simulation VaR
+
+⸻
+
+1️⃣ Pozisyonu Tanımla
+
+Diyelim:
+	•	Spot altın fiyatı: 2,000 USD/ons
+	•	USD/TRY kuru: 30
+	•	Pozisyon: +100 ons altın forward
+	•	Pozisyonun bugünkü TL değeri: 2,000 USD/ons × 100 ons × 30 = 6,000,000 TL
+
+⸻
+
+2️⃣ Tarihsel Veri Topla
+
+2 ayrı veri setine ihtiyacın var:
+	•	Günlük altın fiyatı (USD/ons) serisi
+	•	Günlük USD/TRY kuru serisi
+
+Genelde son 250 iş günü (1 yıl) kullanılır.
+
+⸻
+
+3️⃣ Getirileri Hesapla
+
+Her gün için:
+r_{altın,t} = \ln\left(\frac{S_t}{S_{t-1}}\right)
+\quad \text{ve} \quad
+r_{kur,t} = \ln\left(\frac{K_t}{K_{t-1}}\right)
+
+⸻
+
+4️⃣ Forward Pozisyonun Günlük TL Değer Değişimlerini Hesapla
+
+Her gün için:
+\Delta V_t = V \times (r_{altın,t} + r_{kur,t})
+
+Yaklaşık lineer varsayım (delta-normal) burada da geçerli.
+
+⸻
+
+5️⃣ Günlük Kar/Zarar Serisini Oluştur
+
+Bu, her gün forward pozisyonunun TL bazında ne kadar değiştiğini gösterir.
+
+⸻
+
+6️⃣ İstenen Güven Seviyesinde VaR Hesapla
+
+Örneğin %99 güven aralığı:
+	•	250 günlük veride en kötü 1% ≈ 2.5 gözlem.
+	•	Günlük değişimleri küçükten büyüğe sırala.
+	•	En kötü 3. değer (1% kuyruk) VaR’dır.
+
+⸻
+
+7️⃣ Örnek
+
+Diyelim ki son 250 gün için ΔV_t hesapladın ve sıraladın:
+En kötü 1% gözlemler:
+
+-230,000 TL  
+-215,000 TL  
+-210,000 TL
+
+Buna göre:
+VaR_{99\%} = 230,000 TL
+
+Yani tarihsel olarak en kötü %1’lik günlerde bu forward işleminin kaybı 230,000 TL olmuştur.
+
+⸻
+
+✔️ Avantajı
+	•	Parametrik varsayım yok (normal dağılım varsayılmaz).
+	•	Piyasa şoklarını doğal haliyle taşır.
+
+⸻
+
+✔️ Kısıt
+	•	Geçmişte yaşanmayan senaryolar yoktur.
+	•	Uç riskler atlanabilir.
+	•	Yeterli veri yoksa belirsizlik artar.
+
+⸻
+
+🔑 Pratik Python Kodu İster misin?
+
+İstersen hemen bir pandas + numpy kodu hazırlayıp verebilirim:
+	•	Altın ve kur verisini oku,
+	•	Log getirileri hesapla,
+	•	Kar/Zarar serisini oluştur,
+	•	VaR hesapla.
+
+İster misin? 🚀
