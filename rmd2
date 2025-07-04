@@ -1,0 +1,127 @@
+Mükemmel bir detay verdin!
+Şimdi durum şu:
+
+Nisan ayında yapılmış, Aralık vadeli bir USD/TRY forward işlem var.
+
+Yani:
+	•	Spot kur şimdi var.
+	•	Forward kur, Nisan’da belirlenmiş.
+	•	Vade: Yaklaşık 8 ay (Nisan → Aralık).
+	•	Pozisyon: Mesela 1 milyon USD long forward (alıcısın).
+
+Bu durumda VaR hesaplamak için spot risk tek başına yetmez, çünkü:
+
+✅ Vade uzun → Faiz farkı etkisi büyüktür!
+✅ TRY faizleri dalgalı → Forward kur ciddi değişebilir.
+
+⸻
+
+📌 Aralık vadeli USD/TRY Forward İçin VaR’da ne lazım?
+
+Artık iki temel risk faktörü var:
+
+1️⃣ Spot USD/TRY kuru
+2️⃣ USD-TRY faiz farkı (interest rate differential)
+
+Forward kurun tam formülü:
+F_t = S_t \times e^{(r_{usd,t} - r_{try,t}) T}
+
+⸻
+
+📌 Yani forward değer değişimi nasıl oluşur?
+
+Forward pozisyonun bugünkü değeri:
+V = Miktar \times (F_t - F_0)
+
+Burada:
+	•	F_0: Forward sözleşme yapıldığı günkü forward kur (Nisan’da fixlendi)
+	•	F_t: Bugünkü forward kur (yani piyasa forward kuru)
+
+Forward’ın mark-to-market değeri:
+\text{MTM} = (F_t - F_0) \times \text{Nominal USD}
+
+⸻
+
+📌 Risk kaynakları
+
+Forward fiyat değişimi:
+\Delta F_t = F_t - F_{t-1} = [\text{Spot değişimi}] + [\text{Faiz farkı değişimi}]
+
+Yaklaşık:
+\frac{\Delta F}{F} \approx \frac{\Delta S}{S} + T \times (\Delta r_{usd} - \Delta r_{try})
+
+Yani:
+	•	Spot kur hareketi.
+	•	USD faiz hareketi.
+	•	TRY faiz hareketi.
+
+⸻
+
+📌 Historical Simulation için nasıl yapılır?
+
+1️⃣ Veri topla
+	•	Spot USD/TRY kuru (günlük kapanış)
+	•	USD faiz serisi (ör: SOFR 1M, 3M)
+	•	TRY faiz serisi (ör: TCMB politika faizi veya swap eğrisi)
+
+2️⃣ Faiz farkı serisini hesapla
+
+\Delta r = r_{usd} - r_{try}
+\quad \text{ve günlük değişimini al:} \quad
+\Delta (\Delta r)
+
+⸻
+
+3️⃣ Günlük forward değişimini simüle et
+
+r_{kur,t} = \ln \left( \frac{S_t}{S_{t-1}} \right)
+\quad
+\Delta r_{diff,t} = (\Delta r_{usd,t} - \Delta r_{try,t})
+
+Forward kur yaklaşık değişir:
+\frac{\Delta F}{F} \approx r_{kur,t} + T \times \Delta r_{diff,t}
+
+Burada T kalan gün/365’tir.
+
+⸻
+
+4️⃣ Pozisyonun TL bazlı günlük P&L’ini bul
+
+\Delta V_t = Nominal USD \times F_0 \times (\text{Forward % değişim})
+
+veya:
+\Delta V_t = Nominal USD \times F_0 \times [r_{kur,t} + T \times \Delta r_{diff,t}]
+
+⸻
+
+5️⃣ Günlük kar/zarar dağılımını sırala
+
+%99 Historical VaR = en kötü %1’lik kayıp.
+
+⸻
+
+✔️ Sonuç
+
+Bu durumda:
+✅ Spot kur hareketi + USD faiz + TRY faiz dalgalanması
+✅ Korelasyonları otomatik: Historical Simulation bunları otomatik taşır.
+✅ Vade uzun → Faiz farkını mutlaka kat!
+✅ T zamanla kısaldıkça faiz farkı etkisi azalır.
+
+⸻
+
+📌 Pratik Öneri
+
+En temiz yaklaşım:
+	•	USD Libor veya SOFR serisi kullan.
+	•	TRY swap faiz eğrisi verisi kullan.
+	•	Gerekirse politika faizi değişimi ekle.
+	•	Forward kurdaki faiz farkını tarihe göre dinamik hesapla.
+
+⸻
+
+✔️ İstersen hemen Python/Excel kodu çıkartayım
+
+Spot + USD faiz + TRY faiz → Forward % değişim → VaR.
+
+İster misin? Tam örnek dosya veririm! 🚀
