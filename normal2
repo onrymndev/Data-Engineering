@@ -1,0 +1,53 @@
+import numpy as np
+import pandas as pd
+from scipy.stats import t
+
+# ============================================================
+# df: DataFrame where rows = daily observations, cols = segments
+# Each value = deposit balance (>=0)
+# ============================================================
+
+# 1️⃣ Compute daily run-off rates
+#     r_{t,s} = 1 - B_{t,s} / B_{t-1,s}
+def compute_daily_runoff(df):
+    runoff = 1 - df / df.shift(1)
+    return runoff
+
+runoff_daily = compute_daily_runoff(df)
+
+# 2️⃣ Normalize (z-score) per segment
+mu_r = runoff_daily.mean()
+sd_r = runoff_daily.std(ddof=1)
+runoff_norm = (runoff_daily - mu_r) / sd_r
+
+# 3️⃣ Compute 95 % confidence interval for normalized daily run-off
+n = runoff_norm.count()
+mean_z = runoff_norm.mean()
+sd_z = runoff_norm.std(ddof=1)
+tcrit = pd.Series([t.ppf(0.975, df=k-1) if k >= 2 else np.nan for k in n], index=n.index)
+sem_z = sd_z / np.sqrt(n)
+ci_low_z = mean_z - tcrit * sem_z
+ci_high_z = mean_z + tcrit * sem_z
+
+# 4️⃣ Convert CI bounds back to original (percentage) units
+#     r = μ_r + z * σ_r
+ci_low_real = mu_r + ci_low_z * sd_r
+ci_high_real = mu_r + ci_high_z * sd_r
+
+# 5️⃣ Combine results into one summary table
+ci_table = pd.DataFrame({
+    'n': n,
+    'mean_runoff_%': mu_r * 100,
+    'sd_runoff_%': sd_r * 100,
+    'ci_low_95_%': ci_low_real * 100,
+    'ci_high_95_%': ci_high_real * 100
+})
+
+# ============================================================
+# OUTPUTS
+# ============================================================
+print("Daily Run-off rates (first few rows):")
+print(runoff_daily.head())
+
+print("\n95 % Confidence Intervals (in original % units):")
+print(ci_table.round(3))
