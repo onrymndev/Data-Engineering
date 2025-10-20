@@ -1,0 +1,45 @@
+import numpy as np
+import pandas as pd
+from scipy.stats import t
+
+# ============================================================
+# df: rows = daily observations, cols = segments (deposit balances)
+# index must be a DateTimeIndex
+# ============================================================
+
+# 1️⃣ Compute daily run-off: r_{t,s} = 1 − B_{t,s} / B_{t−1,s}
+def compute_daily_runoff(df):
+    return 1 - df / df.shift(1)
+
+runoff_daily = compute_daily_runoff(df)
+
+# 2️⃣ Basic statistics (real-world daily run-off rates)
+mu_r = runoff_daily.mean()
+sd_r = runoff_daily.std(ddof=1)
+
+# 3️⃣ One-sided 95 % confidence limit for a 6-month (126-day) horizon
+days = 126
+tcrit = t.ppf(0.95, df=days - 1)   # one-sided 95 % critical value
+
+# Choose side: "upper" or "lower"
+side = "upper"
+
+if side == "upper":
+    ci_real = mu_r + tcrit * (sd_r / np.sqrt(days))
+elif side == "lower":
+    ci_real = mu_r - tcrit * (sd_r / np.sqrt(days))
+else:
+    raise ValueError("side must be 'upper' or 'lower'")
+
+# 4️⃣ Build final summary table (in % units)
+ci_table = pd.DataFrame({
+    'mean_runoff_%': mu_r * 100,
+    'sd_runoff_%': sd_r * 100,
+    'one_sided_95CI_%': ci_real * 100
+})
+
+# ============================================================
+# OUTPUT
+# ============================================================
+print(f"One-sided 95 % CI ({side}) over 126-day horizon (real % units):")
+print(ci_table.round(4))
