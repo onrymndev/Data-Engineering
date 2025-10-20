@@ -1,0 +1,145 @@
+import numpy as np
+import pandas as pd
+from scipy.stats import t
+
+# ============================================================
+# 1) Run-off per column vs first valid day
+#    r_{t,s} = 1 - X_{t,s} / X_{0,s}
+# ============================================================
+def compute_runoff(df: pd.DataFrame) -> pd.DataFrame:
+    runoff = pd.DataFrame(index=df.index, columns=df.columns, dtype=float)
+    for c in df.columns:
+        col = df[c]
+        i0 = col.first_valid_index()
+        if i0 is None or pd.isna(col.loc[i0]) or col.loc[i0] == 0:
+            runoff[c] = np.nan
+            continue
+        base = col.loc[i0]
+        r = 1.0 - (col / base)
+        # keep days before first valid baseline as NaN (excluded from stats)
+        r.loc[:i0] = r.loc[:i0]
+        runoff[c] = r
+    return runoff
+
+# ============================================================
+# 2) Column-wise z-score standardization of run-off
+#    z = (r - mu_r) / sigma_r
+#    Returns z, along with per-column (mu_r, sigma_r)
+# ============================================================
+def zscore_columns(runoff: pd.DataFrame):
+    mu = runoff.mean(axis=0, skipna=True)
+    sd = runoff.std(axis=0, ddof=1, skipna=True)
+    # avoid divide-by-zero: if sd == 0 make z NaN for that column
+    sd_safe = sd.replace(0, np.nan)
+    z = (runoff - mu) / sd_safe
+    return z, mu, sd
+
+# ============================================================
+# 3) 95% t-interval for mean in z-space
+#    CI_z: mean(z) ± t_{0.975, n-1} * sd(z) / sqrt(n)
+#    (Since z is computed from the same sample, mean(z)≈0, sd(z)≈1)
+# ============================================================
+def ci_on_mean_z(z: pd.DataFrame, alpha: float = 0.05) -> pd.DataFrame:
+    n = z.count(axis=0)
+    mean_z = z.mean(axis=0, skipna=True)
+    sd_z = z.std(axis=0, ddof=1, skipna=True)
+    tcrit = pd.Series(
+        [t.ppf(1 - alpha/2, df=k-1) if k >= 2 else np.nan for k in n],
+        index=z.columns
+    )
+    sem_z = sd_z / np.sqrt(n)
+    ci_low_z = mean_z - tcrit * sem_z
+    ci_high_z = mean_z + tcrit * sem_z
+    return pd.DataFrame({
+        'n': n, 'mean_z': mean_z, 'sd_z': sd_z, 'tcrit': tcrit,
+        'ci_low_z': ci_low_z, 'ci_high_z': ci_high_z
+    })
+
+# ============================================================
+# 4) Back-transform CI_z to original run-off units:
+#    r = mu_r + z * sigma_r
+#    => CI_r = [ mu_r + ci_low_z * sigma_r,  mu_r + ci_high_z * sigma_r ]
+# ============================================================
+def backtransform_ci(ci_z: pd.DataFrame, mu_r: pd.Series, sd_r: pd.Series) -> pd.DataFrame:
+    ci_low_r  = mu_r + ci_z['ci_low_z']  * sd_r
+    ci_high_r = mu_r + ci_z['ci_high_z'] * sd_r
+    out = pd.DataFrame({
+        'n': ci_z['n'],
+        'mean_runoff': mu_r,
+        'sd_runoff': sd_r,
+        'ci_low_runoff': ci_low_r,
+        'ci_high_runoff': ci_high_r
+    })
+    return out
+
+# ============================================================
+# 5) Backtest: count days where daily run-off is outside CI
+#    (Compare each daily r_{t,s} to CI_r[s])
+# ============================================================
+def backtest_breaches_real(runoff: pd.DataFrame, ci_r: pd.DataFrame):
+    upper = pd.DataFrame(index=runoff.index)
+    lower = pd.DataFrame(index=runoff.index)
+    any_breach = pd.DataFrame(index=runoff.index)
+
+    for c in runoff.columns:
+        lo = ci_r.loc[c, 'ci_low_runoff']
+        hi = ci_r.loc[c, 'ci_high_runoff']
+        upper[c] = runoff[c] > hi
+        lower[c] = runoff[c] < lo
+        any_breach[c] = upper[c] | lower[c]
+
+    stats_rows = []
+    for c in runoff.columns:
+        n_obs = runoff[c].count()
+        u = int(upper[c].sum())
+        l = int(lower[c].sum())
+        b = int(any_breach[c].sum())
+        stats_rows.append({
+            'segment': c,
+            'n_obs': n_obs,
+            'upper_breaches': u,
+            'lower_breaches': l,
+            'total_breaches': b,
+            'breach_rate': (b / n_obs) if n_obs else np.nan
+        })
+    stats_df = pd.DataFrame(stats_rows).set_index('segment')
+    return upper, lower, any_breach, stats_df
+
+# ============================================================
+# PIPELINE
+# ============================================================
+def run_pipeline_zscore(df: pd.DataFrame, alpha: float = 0.05):
+    # 1) Run-off per segment
+    runoff = compute_runoff(df)
+
+    # 2) z-score (store mu, sd of original run-off for back-transform)
+    z, mu_r, sd_r = zscore_columns(runoff)
+
+    # 3) CI on the mean in z-space
+    ci_z = ci_on_mean_z(z, alpha=alpha)
+
+    # 4) Back-transform CI to original run-off units (real meaning)
+    ci_r = backtransform_ci(ci_z, mu_r, sd_r)
+
+    # 5) Backtest in original units
+    upper, lower, any_breach, breach_stats = backtest_breaches_real(runoff, ci_r)
+
+    return {
+        'runoff': runoff,           # original run-off paths
+        'z_scores': z,              # z-scored run-off
+        'ci_z': ci_z,               # CI in z-space
+        'ci_runoff': ci_r,          # CI in original run-off units
+        'breach_upper': upper,      # boolean DF: r > CI_high
+        'breach_lower': lower,      # boolean DF: r < CI_low
+        'breach_any': any_breach,   # boolean DF: any breach
+        'breach_stats': breach_stats
+    }
+
+# =========================
+# EXAMPLE USAGE
+# =========================
+# df: DataFrame with rows=daily dates, cols=segments (deposits >=0)
+# df.index = pd.to_datetime(df.index)  # recommended
+# results = run_pipeline_zscore(df, alpha=0.05)
+# print(results['ci_runoff'])     # 95% CI for mean run-off (real meaning)
+# print(results['breach_stats'])  # backtest breach counts/rates
